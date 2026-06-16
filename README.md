@@ -5,6 +5,10 @@ monitoring stack runs on both EKS and AKS, so the only real difference between
 the clouds is the cluster provisioning. Everything is built to spin up, capture
 proof for a portfolio writeup, and tear down so cost stays near zero.
 
+> Status: the AWS (EKS) path has been deployed and validated end to end
+> (Prometheus scraping all targets, alert rules loaded, Grafana live). The
+> Azure (AKS) path is built and Terraform-validated; live apply pending.
+
 ## What gets deployed
 
 Identical core on each cloud via the `kube-prometheus-stack` Helm chart:
@@ -17,6 +21,42 @@ Identical core on each cloud via the `kube-prometheus-stack` Helm chart:
   real data
 - Custom **alert rules** (target down, pod crashloop, high memory) wired to
   AlertManager
+
+## Architecture
+
+The same in-cluster stack runs on both clouds. Terraform provisions the cluster,
+Helm installs `kube-prometheus-stack`, and Prometheus scrapes the node, cluster,
+and sample-app targets. Grafana reads from Prometheus, and AlertManager routes
+the alert rules.
+
+```mermaid
+flowchart TB
+    laptop["Laptop<br/>terraform + helm + kubectl"]
+
+    subgraph cloud["EKS or AKS cluster"]
+        direction TB
+        subgraph monitoring["namespace: monitoring"]
+            prom["Prometheus"]
+            graf["Grafana"]
+            am["AlertManager"]
+            ksm["kube-state-metrics"]
+            ne["node-exporter"]
+        end
+        subgraph demo["namespace: demo-app"]
+            app["sample-app<br/>/metrics"]
+        end
+    end
+
+    laptop -- "terraform apply" --> cloud
+    laptop -- "helm install" --> monitoring
+    prom -- scrape --> ne
+    prom -- scrape --> ksm
+    prom -- "scrape (ServiceMonitor)" --> app
+    graf -- query --> prom
+    prom -- "alert rules" --> am
+    laptop -. "port-forward (demo)" .-> graf
+    laptop -. "port-forward (demo)" .-> am
+```
 
 ## Layout
 

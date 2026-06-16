@@ -1,0 +1,50 @@
+# Values for the kube-prometheus-stack Helm chart.
+# Tuned small for a deploy/demo/destroy cluster: short retention, modest
+# resource requests, and a Grafana admin password set for the demo.
+
+grafana:
+  adminPassword: "observability-demo"  # demo only; rotate or template for anything real
+  defaultDashboardsEnabled: true
+  service:
+    type: ClusterIP # accessed via kubectl port-forward in demo.sh
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    # Discover ServiceMonitors / PodMonitors in all namespaces, not just those
+    # carrying the chart's release label. Lets the sample app be scraped.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 1h
+      receiver: "null"
+    receivers:
+      # Default sink is a no-op so the demo does not require a real Slack/PagerDuty
+      # endpoint. Swap in a slack_configs block here to route for real.
+      - name: "null"
+
+# Keep node-exporter and kube-state-metrics on (default) for real node signals.
+nodeExporter:
+  enabled: true
+kubeStateMetrics:
+  enabled: true

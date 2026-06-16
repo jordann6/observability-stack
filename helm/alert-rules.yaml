@@ -1,0 +1,43 @@
+# Custom PrometheusRule with a few demo-friendly alerts. The kube-prometheus-stack
+# Prometheus is configured (ruleSelectorNilUsesHelmValues: false) to pick this up
+# from any namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: observability-demo-rules
+  labels:
+    # release label helps Prometheus discover the rule regardless of selector mode
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: observability-demo.rules
+      rules:
+        # Fires fast when the sample app target disappears (used by demo.sh).
+        - alert: SampleAppTargetDown
+          expr: up{job="sample-app"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Sample app target is down"
+            description: "Prometheus has not been able to scrape the sample app for over 1 minute."
+
+        # Generic crashloop detector across the cluster.
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[5m]) > 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting"
+            description: "Container is restarting more than once over the last 5 minutes."
+
+        # Node memory pressure.
+        - alert: NodeHighMemory
+          expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage on {{ $labels.instance }}"
+            description: "Node memory usage has been above 85% for 5 minutes."

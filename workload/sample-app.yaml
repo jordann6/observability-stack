@@ -1,0 +1,75 @@
+# A tiny workload that exposes Prometheus metrics on :8080/metrics, plus a
+# ServiceMonitor so the stack scrapes it. Gives the dashboards real data and
+# gives demo.sh a target to knock over to trip the SampleAppTargetDown alert.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+  namespace: demo-app
+  labels:
+    app: sample-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sample-app
+  template:
+    metadata:
+      labels:
+        app: sample-app
+    spec:
+      containers:
+        - name: sample-app
+          # Lightweight app that serves Prometheus metrics on :8080/metrics
+          image: ghcr.io/prometheus/prometheus-example-app:v0.4.1
+          ports:
+            - name: metrics
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app
+  namespace: demo-app
+  labels:
+    app: sample-app
+spec:
+  selector:
+    app: sample-app
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sample-app
+  namespace: demo-app
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: sample-app
+  namespaceSelector:
+    matchNames:
+      - demo-app
+  endpoints:
+    - port: metrics
+      interval: 15s
+      # job label here is what the SampleAppTargetDown alert keys off of
+      relabelings:
+        - targetLabel: job
+          replacement: sample-app

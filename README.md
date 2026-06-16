@@ -5,9 +5,9 @@ monitoring stack runs on both EKS and AKS, so the only real difference between
 the clouds is the cluster provisioning. Everything is built to spin up, capture
 proof for a portfolio writeup, and tear down so cost stays near zero.
 
-> Status: the AWS (EKS) path has been deployed and validated end to end
-> (Prometheus scraping all targets, alert rules loaded, Grafana live). The
-> Azure (AKS) path is built and Terraform-validated; live apply pending.
+> Status: both the AWS (EKS) and Azure (AKS) paths have been deployed and
+> validated end to end (Prometheus scraping all targets up, alert rules loaded,
+> Grafana live), then torn down clean with zero residual billing on each cloud.
 
 ## What gets deployed
 

@@ -22,3 +22,17 @@ kubeconfig-*
 docs/*.png
 docs/*.jpg
 .DS_Store
+
+# --- platform-guardrails ---
+!example.tfvars
+tfplan
+plan.json
+.terraform/
+.env
+.envrc
+kubeconfig
+*.pem
+*.ppk
+.checkov.json
+infracost.json
+!docs/architecture.png

@@ -24,10 +24,14 @@ Identical core on each cloud via the `kube-prometheus-stack` Helm chart:
 
 ## Architecture
 
+![Architecture: a guardrails CI gate (conftest on the Terraform plan: required tags, CostCenter allocation, cost budget) provisions identical kube-prometheus-stack monitoring on EKS and AKS; Prometheus scrapes each cluster and feeds Grafana, and critical Alertmanager alerts webhook into the incident-responder runbook which summarizes, remediates, and escalates to Slack](docs/architecture.png)
+
 The same in-cluster stack runs on both clouds. Terraform provisions the cluster,
 Helm installs `kube-prometheus-stack`, and Prometheus scrapes the node, cluster,
 and sample-app targets. Grafana reads from Prometheus, and AlertManager routes
-the alert rules.
+the alert rules. Critical alerts do not stop at a dashboard: they hand off to the
+incident-responder runbook (detect -> summarize -> remediate -> verify ->
+escalate), so this is part of the platform loop, not a standalone monitoring tool.
 
 ```mermaid
 flowchart TB
@@ -69,6 +73,41 @@ observability-stack/
 ├── scripts/            # deploy / demo / destroy
 └── docs/               # screenshots and writeup notes
 ```
+
+## Governance and platform integration
+
+Observability is only useful if it is governed like the rest of the platform and
+if an alert leads somewhere. This stack is wired into the same paved-road pattern
+as the other projects:
+
+- **Guardrails gate (prevent).** The `platform-guardrails` conftest gate runs on
+  the Terraform plan in CI: required tags (`Project`, `Environment`, `Owner`,
+  `ManagedBy`), a `CostCenter` allocation tag so cluster spend is chargeable, and
+  a cost budget. Because the cluster is built from the VPC/EKS modules, the tags
+  are enforced through provider `default_tags`, the only place that reaches
+  resources created inside a module.
+- **Alert handoff (respond).** Alertmanager routes `severity=critical` to the
+  `incident-responder` runbook (n8n on ECS Fargate) by webhook. Same
+  detect -> runbook contract as a CloudWatch alarm -> SNS -> n8n, just sourced
+  from Prometheus. The runbook asks Claude for a plain-English summary, posts an
+  incident card to Slack, attempts remediation, then re-checks before it resolves
+  or escalates.
+- **Cost observability (attribute).** OpenCost (or Kubecost's OSS core) attributes
+  in-cluster spend by the same `CostCenter` label the gate requires, so the
+  observability layer answers "what is this costing and who owns it," not just
+  "is it up." This is the detection half of the FinOps loop the cost dashboards
+  and the governed pipeline enforce at the gate.
+
+### Observability / control mapping
+
+| Concern | Implementation | Satisfies |
+| --- | --- | --- |
+| Metrics + dashboards | kube-prometheus-stack (Prometheus + Grafana) on EKS and AKS | platform observability, multi-cloud parity |
+| Alerting | PrometheusRule (target down, crashloop, node memory) -> Alertmanager | operational awareness |
+| Alert -> action | critical alerts webhook to the incident-responder runbook | incident response, MTTR |
+| Cost attribution | OpenCost by `CostCenter`; guardrails gate requires the tag | FinOps ownership, chargeback |
+| Change control | conftest gate on the Terraform plan in CI | tags + budget cannot be skipped |
+| Multi-cloud | identical Helm stack; only cluster provisioning differs | portable across EKS and AKS |
 
 ## Prerequisites
 

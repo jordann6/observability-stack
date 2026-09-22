@@ -28,8 +28,25 @@ variable "node_count" {
   default     = 2
 }
 
+variable "environment" {
+  description = "Environment name, stamped on every resource via provider default_tags"
+  type        = string
+  default     = "demo"
+}
+
+variable "cost_center" {
+  description = "Chargeback allocation code (finops.rego expects the cc-NNNN format)"
+  type        = string
+  default     = "cc-0001"
+
+  validation {
+    condition     = can(regex("^cc-[0-9]{4}$", var.cost_center))
+    error_message = "cost_center must match cc-NNNN (four digits), e.g. cc-0001."
+  }
+}
+
 variable "tags" {
-  description = "Tags applied to all resources"
+  description = "Extra tags merged onto resources (base tags come from provider default_tags)"
   type        = map(string)
   default = {
     Project   = "observability-stack"

@@ -38,10 +38,27 @@ alertmanager:
       group_interval: 5m
       repeat_interval: 1h
       receiver: "null"
+      routes:
+        # Critical alerts do not stop at a dashboard: they hand off to the
+        # aws-incident-responder runbook (n8n on ECS Fargate), which asks Claude
+        # for a plain-English summary, posts an incident card to Slack, attempts
+        # remediation, and re-checks the alert before it resolves or escalates.
+        # This is what makes observability part of the platform loop:
+        # detect (here) -> triage/summarize -> remediate -> verify -> escalate.
+        - matchers: ['severity = "critical"']
+          receiver: "incident-responder"
+          continue: true
     receivers:
-      # Default sink is a no-op so the demo does not require a real Slack/PagerDuty
-      # endpoint. Swap in a slack_configs block here to route for real.
+      # Default sink is a no-op so the demo does not require a real endpoint.
       - name: "null"
+      # Webhook into the incident-responder runbook. URL is the n8n webhook
+      # exposed by the aws-incident-responder stack (ALB + ACM + Route53); set it
+      # per environment. Same detect->runbook contract as a CloudWatch alarm ->
+      # SNS -> n8n, just sourced from Prometheus instead of CloudWatch.
+      - name: "incident-responder"
+        webhook_configs:
+          - url: "https://incident-responder.internal.example.com/webhook/prometheus"
+            send_resolved: true
 
 # Keep node-exporter and kube-state-metrics on (default) for real node signals.
 nodeExporter:
